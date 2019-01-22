@@ -7,12 +7,6 @@
 //#include<netinet/in.h>
 #include<netdb.h> // socket(), connect(), htons(), recv(), send()
 
-/* + Создать гнездо домена INET типа virtual circuit.
- * + Прочитать сообщение из серверного гнезда.
- * + Определить имена файлов, которые нельзя выполнять для данного пользователя и
- * + отправить их в виде сообщения в серверное гнездо.
- */
-
 int main()
 {
     struct sockaddr_in kaddr;
