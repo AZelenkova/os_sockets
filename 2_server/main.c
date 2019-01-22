@@ -1,55 +1,81 @@
-// Server side implementation of UDP client-server model
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netinet/in.h>
+#include<stdio.h>       // perror(), printf(),
+#include<string.h>      // memset(), strlen(), strcmp(), bzero(), bcopy()
+#include<unistd.h>      // chdir(), gethostname(), access(), close()
+#include<stdlib.h>      // exit()
+//#include<sys/types.h>
+//#include<sys/socket.h>
+//#include<netinet/in.h>
+#include<netdb.h> // socket(), connect(), htons(), recv(), send()
 
-#define PORT	 8080
-#define MAXLINE 1024
+// find . -type f -printf "\n%AD %p\n" | grep -E "^11/../18" | cut -d ' ' -f 2-
 
-// Driver code
-int main() {
-    int sockfd;
-    char buffer[MAXLINE];
-    char *hello = "Hello from server";
-    struct sockaddr_in servaddr, cliaddr;
+int main()
+{
+    struct sockaddr_in addr;
+    struct hostent *hp;
+    FILE *find_pipe;
+    char *line = NULL;
+    ssize_t read1;
+    char buffer[512] = {0};
+    int sid, sid_fd;
+    size_t len = 0;
 
-    // Creating socket file descriptor
-    if ( (sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0 ) {
-        perror("socket creation failed");
-        exit(EXIT_FAILURE);
+    sid = socket(AF_INET, SOCK_STREAM, 0);
+    if (sid == -1) exit(1);
+    printf("Сервер\n--------------------\nСокет создан\n");
+
+    bzero((void *)&addr, sizeof(addr));
+
+    gethostname(buffer, 256);
+    hp = gethostbyname(buffer);
+    bcopy((void *)hp -> h_addr, (void *)&addr.sin_addr, (size_t)hp -> h_length);
+    memset(buffer,0,strlen(buffer));
+
+    addr.sin_port = htons(8080);
+    addr.sin_family = AF_INET;
+
+    if(bind(sid, (struct sockaddr *)&addr,sizeof(addr)) != 0){
+        perror("error bind\n");
+        close(sid);
+        exit(1);
+       }
+
+    printf("Подключение сокета успешно\n");
+
+    if(listen(sid,0) != 0){
+        printf("error listen\n");
+        close(sid);
+        exit(1);
+    }
+    printf("Жду клиента\n");
+
+
+    sid_fd = accept(sid,0,0);
+    printf("Клиент подключен\n");
+
+    find_pipe = popen("find /home/anna/Desktop -type f -printf \"\n%AD %p\n\" | grep -E \"^11/../18\" | cut -d ' ' -f 2-", "r");
+    if(!find_pipe){
+         perror("One or both pipes failed.\n");
+         close(sid_fd);
+         close(sid);
+         exit(1);
     }
 
-    memset(&servaddr, 0, sizeof(servaddr));
-    memset(&cliaddr, 0, sizeof(cliaddr));
 
-    // Filling server information
-    servaddr.sin_family = AF_INET; // IPv4
-    servaddr.sin_addr.s_addr = INADDR_ANY;
-    servaddr.sin_port = htons(PORT);
-
-    // Bind the socket with the server address
-    if ( bind(sockfd, (const struct sockaddr *)&servaddr,
-            sizeof(servaddr)) < 0 )
-    {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
+    while ((read1 = getline(&line, &len, find_pipe)) != -1){
+        send(sid_fd, line, (size_t)read1, 0);
+        memset(buffer,0,strlen(buffer));
+        recv(sid_fd, buffer, sizeof(buffer), 0);
+        if(strcmp(buffer,"") != 0) printf("%s\n",buffer);
     }
 
-    int len, n;
-    n = recvfrom(sockfd, (char *)buffer, MAXLINE,
-                MSG_WAITALL, ( struct sockaddr *) &cliaddr,
-                &len);
-    buffer[n] = '\0';
-    printf("Client : %s\n", buffer);
-    sendto(sockfd, (const char *)hello, strlen(hello),
-        MSG_CONFIRM, (const struct sockaddr *) &cliaddr,
-            len);
-    printf("Hello message sent.\n");
+    send(sid_fd, "exit", 4, 0);
+    memset(buffer,0,strlen(buffer));
+    recv(sid_fd, buffer, sizeof(buffer), 0);
+    if(strcmp(buffer,"") != 0) printf("%s",buffer);
 
-    return 0;
+
+    pclose (find_pipe);
+    close(sid_fd);
+    close(sid);
 }
